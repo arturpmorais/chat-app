@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import './App.css';
 
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 import 'firebase/compat/auth';
+import 'firebase/compat/analytics';
 
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { useCollectionData } from 'react-firebase-hooks/firestore'
@@ -22,6 +23,7 @@ firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const firestore = firebase.firestore();
+const analytics = firebase.analytics();
 
 const App = () => {
 
@@ -30,6 +32,7 @@ const App = () => {
   return (
     <div className="App">
       <header>
+        <SignOut />
       </header>
       <section>
         {user ? <ChatRoom /> : <SignIn/> }
@@ -61,7 +64,28 @@ const ChatRoom = () => {
   const messagesRef = firestore.collection('messages');
   const query = messagesRef.orderBy('createdAt').limit(25);
 
+  const dummy = useRef();
+
   const [messages] = useCollectionData(query, { idField: 'id' });
+
+  const [formValue, setFormValue] = useState('');
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+
+    const { uid, photoURL } = auth.currentUser;
+
+    await messagesRef.add({
+      text: formValue,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      uid,
+      photoURL
+    })
+
+    setFormValue('')
+
+    dummy.current.scrollIntoView({ });
+  }
 
   return (
     <>
@@ -69,18 +93,28 @@ const ChatRoom = () => {
         {
           messages && messages.map(msg => <ChatMessage key={msg.id} message={msg} />)
         }
+        <div ref={dummy}></div>
       </div>
+      <form onSubmit={sendMessage}>
+        <input value={formValue} onChange={(e) => setFormValue(e.target.value)}/>
+        <button type='submit'>Send!</button>
+      </form>
     </>
   );
 }
 
 const ChatMessage = (props) => {
-  const { text, uid } = props.message;
+  const { text, uid, photoURL } = props.message;
+
+  const messageClass = uid === auth.currentUser.uid ? 'sent' : 'received';
   
   return (
-    <p>
-      {`${text} (${uid})`}
-    </p>
+    <div className={`message ${messageClass}`}>
+      <img src={photoURL || 'https://api.adorable.io/avatars/23/abott@adorable.png'} />
+      <p>
+        {`${text}`}
+      </p>
+    </div>
   )
 }
 
